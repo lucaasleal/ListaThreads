@@ -1,0 +1,48 @@
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define NUM_THREADS 4
+
+pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER; //criação estática.
+int global_counter = 0;
+ 
+void* counter(void* threadid)
+{
+  int* tid = ((int *) threadid);
+  while (1)
+  {
+    pthread_mutex_lock(&mut);
+    global_counter++;
+    if (global_counter >= 1000000)
+    {
+      printf("thread %d ganhou a corrida com valor %d\n", *tid, global_counter);
+      exit(0);
+    }
+    pthread_mutex_unlock(&mut);
+  }
+
+  pthread_exit(NULL);
+}
+
+int main()
+{
+  pthread_t threads[NUM_THREADS];
+  int threadid[NUM_THREADS];
+
+  for (int i = 0; i < NUM_THREADS; i++)
+    threadid[i] = i;
+
+  for (int i = 0; i < NUM_THREADS; i++)
+  {
+    int rc = pthread_create(&threads[i], NULL, counter, &threadid[i]);
+    if (rc) {printf("Erro detectado\n"); return 1;}
+  }
+
+  pthread_join(threads[0], NULL);
+  pthread_join(threads[1], NULL);
+  pthread_join(threads[2], NULL);
+  pthread_join(threads[3], NULL);
+
+  pthread_exit(NULL);
+}
