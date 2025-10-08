@@ -1,121 +1,107 @@
-#define BUFFER_SIZE 5
-#define PROGRAM_EXECUTION_LIMIT 500
-
-#define C 2
-#define P 1
-
-#include <pthread.h>
 #include <stdio.h>
+#include <pthread.h> 
 #include <stdlib.h>
 
-//1: DECLARAÇÕES
+#define BUFFER_SIZE 10
+#define NUM_ITEMS 5000
 
-pthread_mutex_t MUTEX_BUFFER_ACC = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t  PC_FULL = PTHREAD_COND_INITIALIZER;
-pthread_cond_t  PC_EMPTY= PTHREAD_COND_INITIALIZER;
+#define C 50
+#define P 50
+#define B 1
 
-int buffer[BUFFER_SIZE];
-int item = 0; //LIFO
-long int counter = 0;
+int buff[BUFFER_SIZE];  /* buffer size = 10; */
+int items = 0; // number of items in the buffer.
+int first = 0;
+int last = 0; 
+int consumed = 0;
+int produced = 0;
 
-//2. THREAD CONSUMIDOR
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
+pthread_cond_t fill = PTHREAD_COND_INITIALIZER;
+ 
+void *producer();
+void *consumer();
 
-void* CONS_ROUTINE(void* TREADPARAMS)
-{
-  while (1)
-  {
-    int* value= ((int *) TREADPARAMS); 
+int main() {
+   pthread_t CONS[C];
+   pthread_t PROD[P];
 
-    pthread_mutex_lock(&MUTEX_BUFFER_ACC);
-    if (counter >= PROGRAM_EXECUTION_LIMIT) exit(0);
-    if (item < 0) {printf("waiting for producer...\n"); pthread_cond_wait(&PC_EMPTY, &MUTEX_BUFFER_ACC);}
-    while (item < 0) pthread_cond_wait(&PC_EMPTY, &MUTEX_BUFFER_ACC);
+  for (int i = 0; i < P; i++)
+    pthread_create(&PROD[i], NULL, producer, NULL);
+  for (int i = 0; i < C; i++)
+    pthread_create(&CONS[i], NULL, consumer, NULL);
 
-    if (item >= BUFFER_SIZE) item = BUFFER_SIZE - 1;
-    int READ_VAL = buffer[item--];
-    printf("thread %d read value %d from buffer position %d\n", *value, READ_VAL, item + 1);
-    if (item < BUFFER_SIZE) pthread_cond_signal(&PC_FULL);
 
-    pthread_mutex_unlock(&MUTEX_BUFFER_ACC);
+  for (int i = 0; i < P; i++)
+    pthread_join(PROD[i], NULL);
+  for (int i = 0; i < C; i++)
+    pthread_join(CONS[i], NULL);
+
+}
+
+void put(int i){
+  pthread_mutex_lock(&mutex);
+  while(items == BUFFER_SIZE) { 
+    pthread_cond_wait(&empty, &mutex); //Espera até que o buffer tenha espaço
   }
+  buff[last] = i;
+  items++; last++;
 
+  if(last==BUFFER_SIZE) { last = 0; }  //Reinicio da fila circular
+  if(items == 1) { 
+    pthread_cond_broadcast(&fill); } //Chama a produção
+  pthread_mutex_unlock(&mutex); 
+}
+
+void *producer() {
+  int i = 0;
+  printf("Produtor\n");
+  while(produced <= NUM_ITEMS) {
+    put(i);
+    produced++;
+    if (produced > NUM_ITEMS) break;
+    printf("produced: %d\n", produced);
+    if (produced == NUM_ITEMS)
+        printf("Produziu todos os %d itens\n", produced);
+  }
+  items++;
+  pthread_cond_broadcast(&fill);
+  printf("producer finished\n");
   pthread_exit(NULL);
 }
 
-//3. THREAD PRODUTOR:
+int get(){
+  int result;
+  pthread_mutex_lock(&mutex);
+  while((items == 0) && (consumed < NUM_ITEMS)){
+    printf("esvaziou\n");
+    pthread_cond_wait(&fill, &mutex);
+    printf("saiu\n");
+  }
+  result = buff[first];
+  items--; first++;
+  if(first==BUFFER_SIZE) { first = 0; }
+  if(items == BUFFER_SIZE - 1){
+    pthread_cond_broadcast(&empty); //Chama o consumo
+  }
+  pthread_mutex_unlock(&mutex);
+  return result;
+}
 
-void* PROD_ROUTINE(void* THREADPARAMS)
-{
-  while (1)
-  {
-    pthread_mutex_lock(&MUTEX_BUFFER_ACC);
-    if (counter >= 500) exit(0);
-    if (item >= BUFFER_SIZE) {printf("waiting for consumer...\n"); pthread_cond_wait(&PC_FULL, &MUTEX_BUFFER_ACC);}
-    while (item >= BUFFER_SIZE) pthread_cond_wait(&PC_FULL, &MUTEX_BUFFER_ACC);
-
-
-    if (item <= 0) item = 0;
-    buffer[item++] = counter++;
-    printf("wrote value %ld to buffer position %d\n", counter - 1, item - 1);
-    if (item >= 0) pthread_cond_signal(&PC_EMPTY);
-    pthread_mutex_unlock(&MUTEX_BUFFER_ACC);
+void *consumer() {
+  int v;
+  while (consumed <= NUM_ITEMS){
+    v = get();
+    consumed++;
+    if (consumed > NUM_ITEMS) break;
+    printf("consumed: %d\n", consumed);
+    if (consumed == NUM_ITEMS) 
+        printf("consumi todos os %d itens\n", consumed);
   }
 
-  pthread_exit(NULL);
-} 
-
-//4. THREAD MAIN:
-
-int main()
-{
-  
-  int taskidCONS[C];
-  int taskidPROD[P];
-  
-  pthread_t CONS[C];
-  pthread_t PROD[P];
-  
-
-  /*
-  pthread_t PROD;
-  pthread_t CONS1, CONS2, CONS3;
-
-  int taskid[] = {0,1,2,3};
-  
-  int rcPROD = pthread_create(&PROD, NULL, PROD_ROUTINE,   (void*)&taskid[0]);
-  int rcCONS1 = pthread_create(&CONS1, NULL, CONS_ROUTINE, (void*)&taskid[1]);
-  int rcCONS2 = pthread_create(&CONS2, NULL, CONS_ROUTINE, (void*)&taskid[2]);
-  int rcCONS3 = pthread_create(&CONS3, NULL, CONS_ROUTINE, (void*)&taskid[3]);
-  
-
-  if ((rcPROD || rcCONS1 || rcCONS2 || rcCONS3) == 1)
-  {
-    printf("erro na criação das threads\n"); exit(-1);
-  }
-  
-  */
-
-  
-  for (int i = 0; i < C; i++)
-  {
-    taskidCONS[i] = i;
-    int rcCONS = pthread_create(&CONS[i], NULL, CONS_ROUTINE, (void*)&taskidCONS[i]);
-    if (rcCONS) 
-    {
-      printf("teve erro ai chefe\n");
-      exit(1);
-    }
-  }
-  
-  for(int i = 0; i < P; i++)
-  {
-    int rcPROD = pthread_create(&PROD[i], NULL, PROD_ROUTINE, (void*)&taskidPROD[i]);
-    if (rcPROD) 
-    {
-      printf("teve erro ai chefe\n");
-      exit(1);
-    }
-  }
-  
+  items--;
+  pthread_cond_broadcast(&empty);
+  printf("consumer finished\n");
   pthread_exit(NULL);
 }
