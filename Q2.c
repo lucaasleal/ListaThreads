@@ -103,8 +103,8 @@ void *producer() {
 int get(buffer *buffer_atual){
   int result;
   pthread_mutex_lock(&buffer_atual->mutex);
-  while((&buffer_atual->items == 0) && (produced < NUM_ITEMS)){
-    pthread_cond_wait(&buffer_atual->fill, &buffer_atual);
+  while((buffer_atual->items == 0) && (produced < NUM_ITEMS)){
+    pthread_cond_wait(&buffer_atual->fill, &buffer_atual->mutex);
   }
 
   if (buffer_atual->items == 0 && produced >= NUM_ITEMS) {
@@ -119,6 +119,7 @@ int get(buffer *buffer_atual){
   result = buffer_atual->data[buffer_atual->first];
   buffer_atual->items--; 
   buffer_atual->first++;
+  pthread_cond_broadcast(&buffer_atual->empty);
   pthread_mutex_unlock(&buffer_atual->mutex);
   return result;
 }
