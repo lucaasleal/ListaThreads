@@ -3,8 +3,8 @@
 #include <stdlib.h>
 
 #define TAM_ARRAY 10
-#define N 2 //  Número de Threads Leitoras
-#define M 1 //  Número de Threads escritoras
+#define N 9 //  Número de Threads Leitoras
+#define M 7 //  Número de Threads escritoras
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t writingNow = PTHREAD_COND_INITIALIZER;
@@ -33,11 +33,12 @@ int main(){
         writersThreadsID[i] = i;
         pthread_create(&writers[i], NULL, write, &writersThreadsID[i]);
     }
-
-    for (int i = 0; i < N; i++)
-        pthread_join(&readers[i], NULL);
-    for (int i = 0; i < M; i++)
-        pthread_join(&writers[i], NULL);
+    for (int i = 0; i < N; i++){
+        pthread_join(readers[i], NULL);
+    }
+    for (int i = 0; i < M; i++){
+        pthread_join(writers[i], NULL);
+    }
 
     return 0;
 }
@@ -46,7 +47,7 @@ void *read(void* threadID){
     int* tid = ((int *) threadID);
     while(1){
         pthread_mutex_lock(&mutex);
-        while(numWritersNow>0 || numWritersWaiting>0){ //Espera enquanto alguém escreve ou está querendo escrever
+        while(numWritersNow>0){ //Espera enquanto alguém escreve ou está querendo escrever
             pthread_cond_wait(&writingNow, &mutex);
         }
         numReadersNow++;
@@ -56,7 +57,6 @@ void *read(void* threadID){
         int idx = rand()%TAM_ARRAY;
         int data = arr[idx];
         printf("Value %d readed in arr[%d] by reader %d\n", data, idx, *tid);
-
         //Liberação para outro leitor
         pthread_mutex_lock(&mutex);
         numReadersNow--;
@@ -81,10 +81,9 @@ void *write(void* threadID){
 
         //Escrita do dado
         int idx = rand()%TAM_ARRAY;
-        int data = rand();
+        int data = rand()%1000;
         arr[idx] = data;
         printf("Value %d writed in arr[%d] by writer %d\n", data, idx, *tid);
-
         //Liberação para outro escritor ou leitores
         pthread_mutex_lock(&mutex);
         numWritersNow = 0;
