@@ -3,12 +3,13 @@
 #include <stdlib.h>
 
 #define TAM_ARRAY 10
-#define N 9 //  Número de Threads Leitoras
-#define M 7 //  Número de Threads escritoras
+#define N 2 //  Número de Threads Leitoras
+#define M 1 //  Número de Threads escritoras
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t writingNow = PTHREAD_COND_INITIALIZER;
-pthread_cond_t readingNow = PTHREAD_COND_INITIALIZER;
+pthread_cond_t writeNow = PTHREAD_COND_INITIALIZER;
+pthread_cond_t readNow = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t gate_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int numReadersNow = 0;
 int numWritersNow = 0;
@@ -33,9 +34,11 @@ int main(){
         writersThreadsID[i] = i;
         pthread_create(&writers[i], NULL, write, &writersThreadsID[i]);
     }
+
     for (int i = 0; i < N; i++){
         pthread_join(readers[i], NULL);
     }
+
     for (int i = 0; i < M; i++){
         pthread_join(writers[i], NULL);
     }
@@ -46,12 +49,14 @@ int main(){
 void *read(void* threadID){
     int* tid = ((int *) threadID);
     while(1){
+        pthread_mutex_lock(&gate_mutex);
         pthread_mutex_lock(&mutex);
         while(numWritersNow>0){ //Espera enquanto alguém escreve ou está querendo escrever
-            pthread_cond_wait(&writingNow, &mutex);
+            pthread_cond_wait(&readNow, &mutex);
         }
         numReadersNow++;
         pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&gate_mutex);
         
         //Leitura do dado
         int idx = rand()%TAM_ARRAY;
@@ -61,7 +66,7 @@ void *read(void* threadID){
         pthread_mutex_lock(&mutex);
         numReadersNow--;
         if(numReadersNow==0)
-            pthread_cond_signal(&readingNow); //Acorda o primeiro escritor
+            pthread_cond_signal(&writeNow); //Acorda o primeiro escritor
         pthread_mutex_unlock(&mutex);
     }
 }
@@ -69,14 +74,16 @@ void *read(void* threadID){
 void *write(void* threadID){
     int* tid = ((int *) threadID);
     while(1){
+        pthread_mutex_lock(&gate_mutex);
         pthread_mutex_lock(&mutex);
         numWritersWaiting++; //Sinaliza que quer escrever
 
         while(numReadersNow>0 || numWritersNow>0){ //Espera enquanto alguém lê ou escreve
-            pthread_cond_wait(&readingNow, &mutex);
+            pthread_cond_wait(&writeNow, &mutex);
         }
-        numWritersNow = 1;  //Entra como escritor
         numWritersWaiting--; //Tira a sinalização, pois conseguiu entrar como escritor
+        numWritersNow = 1;  //Entra como escritor
+        pthread_mutex_unlock(&gate_mutex);
         pthread_mutex_unlock(&mutex);
 
         //Escrita do dado
@@ -84,14 +91,12 @@ void *write(void* threadID){
         int data = rand()%1000;
         arr[idx] = data;
         printf("Value %d writed in arr[%d] by writer %d\n", data, idx, *tid);
+        
         //Liberação para outro escritor ou leitores
         pthread_mutex_lock(&mutex);
         numWritersNow = 0;
-        if(numWritersWaiting>0){    //Caso alguém ainda queira escrever
-            pthread_cond_signal(&readingNow); //Acorda o próximo escritor
-        } else {
-            pthread_cond_broadcast(&writingNow); //Acorda os leitores
-        }
+        pthread_cond_signal(&writeNow); //Acorda o próximo escritor
+        pthread_cond_broadcast(&readNow); //Acorda os leitores
         pthread_mutex_unlock(&mutex);
     }
 }
