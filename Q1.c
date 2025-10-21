@@ -14,7 +14,7 @@ void* counter(void* threadid)
   {
     pthread_mutex_lock(&mut);
     global_counter++;
-    if (global_counter >= 1000000)
+    if (global_counter >= 1000000) //Verifica se já terminou a contagem após incrementar na thread atual
     {
       printf("thread %d ganhou a corrida com valor %d\n", *tid, global_counter);
       exit(0);
@@ -27,6 +27,8 @@ void* counter(void* threadid)
 
 int main()
 {
+
+  //Inicialização das Threads
   pthread_t threads[NUM_THREADS];
   int threadid[NUM_THREADS];
 
