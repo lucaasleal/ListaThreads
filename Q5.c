@@ -50,7 +50,7 @@ void* Hash_Insert(void *ThreadID) {
         newNode->next = HashTable[index];
         HashTable[index] = newNode;
 
-        printf("[INSERÇÃO] Tid %d: valor %d inserido no bucket %d.\n", ThreadID, value, index);
+        printf("[INSERÇÃO] Tid %d: valor %d inserido no bucket %d.\n", ThreadID, value, index); //
 
         pthread_mutex_unlock(&BucketMutex[index]);
     }

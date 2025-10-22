@@ -3,6 +3,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+// Foi utilizado uma Heap de máximo para implementar a fila de impressão prioritária
+// Cada arquivo enviado para impressão possui uma prioridade, e a impressora sempre seleciona o arquivo com a maior prioridade para imprimir
+// A fila de impressão tem um tamanho máximo, e os usuários que tentam enviar arquivos quando a fila está cheia devem esperar até que haja espaço disponível
+// A impressora também deve esperar quando a fila está vazia, até que novos arquivos sejam enviados para impressão
+// Enquanto uma das duas situações acima ocorre, existe a espera de um recurso compartilhado
+
 #define MAX_QUEUE_SIZE 10                                               // Tamanho máximo da fila de impressão
 #define NUM_USERS 1                                                     // Número de usuários
 #define FILES_PER_USER 0                                                // 0 se quiser arquivos infinitos
@@ -39,12 +45,15 @@ void heapify_down(int index) {                                          // Funç
     int left = 2 * index + 1;
     int right = 2 * index + 2;
 
+    // Algoritmo de remoção de heap de máximo 
     if (left < queue_size && files[left] -> priority > files[max]->priority) {
         max = left;
     }
+    // Verifica se o filho direito é maior que o maior atual
     if (right < queue_size && files[right] -> priority > files[max] -> priority) {
         max = right;
     }
+    // Se o maior não for o índice atual, troca e continua descendo na heap
     if (max != index) {
         swap(index, max);
         heapify_down(max);
@@ -55,6 +64,7 @@ void* printer(void* ThreadID) {                                         // Funç
     while (1) {                 
         pthread_mutex_lock(&queue_mutex);                               // Bloqueia o mutex para acessar a fila
         while (queue_size == 0) {
+            printf("------------------------------------------------------------------------\n");
             printf("Impressora ociosa, aguardando arquivos...\n");      // Espera até que haja arquivos na fila
             pthread_cond_wait(&queue_not_empty, &queue_mutex);         
         }
@@ -68,6 +78,7 @@ void* printer(void* ThreadID) {                                         // Funç
         pthread_cond_signal(&queue_not_full);                           // Sinaliza que a fila não está cheia
         pthread_mutex_unlock(&queue_mutex);                             // Desbloqueia o mutex  
 
+        printf("-------------------------------------------------------------------------\n");
         printf("Imprimindo arquivo ID: %d com prioridade: %d\n", file_2_print->id, file_2_print->priority);
         printf("Conteúdo: %s\n", file_2_print->buffer);
         free(file_2_print);
@@ -87,17 +98,22 @@ void* user(void* ThreadID) {                                            // Funç
         new_file->buffer[63] = '\0';                                    // Importante: sinaliza que é o fim de uma string de conteúdo
 
         pthread_mutex_lock(&queue_mutex);
+        // Espera enquanto a fila estiver cheia
         while (queue_size == MAX_QUEUE_SIZE) {
+            printf("------------------------------------------------------------------------\n");
             printf("Fila cheia. Usuário %d aguardando para enviar arquivo %d...\n", id, i);
             pthread_cond_wait(&queue_not_full, &queue_mutex);
         }
 
+        // Adiciona o novo arquivo à fila (heap)
         files[queue_size] = new_file;
         queue_size++;
         heapify_up(queue_size - 1);
 
+        printf("------------------------------------------------------------------------\n");
         printf("Usuário %d enviou um arquivo com prioridade %d\n", id, new_file->priority); //Caso o arquivo tenha sido adicionado com sucesso
 
+        // Sinaliza que a fila não está vazia
         pthread_cond_signal(&queue_not_empty);
         pthread_mutex_unlock(&queue_mutex);
     }
@@ -121,6 +137,12 @@ int main() {
     }
 
     pthread_join(printer_thread, NULL);
+
+    //Destruição dos mutexes e variáveis de condição
+    pthread_mutex_destroy(&queue_mutex);
+    pthread_cond_destroy(&queue_not_empty);
+    pthread_cond_destroy(&queue_not_full);
+    free(files);
 
     return 0;
 }

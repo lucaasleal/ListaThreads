@@ -4,10 +4,10 @@
 
 //Dados a definir
 #define TAM_ARRAY 10
-#define N 9                  //  Número de Threads Leitoras
+#define N 9                //  Número de Threads Leitoras
 #define M 4                //  Número de Threads escritoras
-#define WRITES_LIMIT 23
-#define READS_LIMIT 41
+#define WRITES_LIMIT 23    //  Tamanho de um ciclo de escritas
+#define READS_LIMIT 41     //  Tamanho de um ciclo de leituras
 
 
 //mutex e variáveis de condição
@@ -57,6 +57,11 @@ int main(){
         pthread_join(writers[i], NULL);
     }
 
+    //Destruição dos mutexes e variáveis de condição
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&writeNow_cond);
+    pthread_cond_destroy(&readNow_cond);
+
     return 0;
 }
 
@@ -64,11 +69,14 @@ void *read(void* threadID){
     int* tid = ((int *) threadID);
     while(1){
         pthread_mutex_lock(&mutex);
-        while(numWritersNow > 0 ||                                 // Escritor ativo
-              writersPriority == 1 || readsNow >= READS_LIMIT){    // É a vez dos escritores
+
+        //Espera caso haja alguem escrevendo, ou seja a vez dos escritores, ou já tenha lido o limite N de leituras
+        while(numWritersNow > 0 ||                                 
+              writersPriority == 1 || readsNow >= READS_LIMIT){    
             pthread_cond_wait(&readNow_cond, &mutex);
         }
 
+        //Entrou como leitor
         numReadersNow++;
         readsNow++;
         pthread_mutex_unlock(&mutex);
@@ -84,9 +92,11 @@ void *read(void* threadID){
 
         if(numReadersNow==0){ //Se não há nenhum leitor ativo, verifique se as leituras já terminaram
             if(readsNow >= READS_LIMIT){
-                printf("%d reads finished\n", readsNow);
+                printf("------------------------------------------------------------------------\n");
+                printf("%d READS FINISHED\n", readsNow);
+                printf("------------------------------------------------------------------------\n");
                 readsNow = 0;
-                readersPriority = 0;
+                readersPriority = 0;                    //Tira a prioridade dos leitores
                 writersPriority = 1;                    //Concede o próximo ciclo aos escritores
                 pthread_cond_broadcast(&writeNow_cond); // Acorda todos os escritores
             } else {
@@ -103,14 +113,17 @@ void *write(void* threadID){
         pthread_mutex_lock(&mutex);
         numWritersWaiting++; //Sinaliza que quer escrever
 
-        while(numReadersNow > 0 ||                                    // Leitores ativos
-              numWritersNow > 0 ||                                    // Outro escritor ativo
-              readersPriority == 1 ){                                   // É a vez dos leitores
+        //Espera caso haja leitores ativos, outro escritor ativo, ou seja a vez dos leitores
+        while(numReadersNow > 0 ||                                   
+              numWritersNow > 0 ||                                   
+              readersPriority == 1 ){                                  
             pthread_cond_wait(&writeNow_cond, &mutex);
         }
 
         numWritersWaiting--; //Tira a sinalização, pois conseguiu entrar como escritor
-        numWritersNow = 1;  //Entra como escritor
+
+        //Entra como escritor
+        numWritersNow = 1;  
         writesNow++; 
         pthread_mutex_unlock(&mutex);
 
@@ -123,14 +136,16 @@ void *write(void* threadID){
         //Liberação para outro escritor ou leitores
         pthread_mutex_lock(&mutex);
         numWritersNow = 0;
-        if(writesNow == WRITES_LIMIT){
-            printf("%d writes finished\n", writesNow);
+        if(writesNow == WRITES_LIMIT){  //Se já escreveu o limite M de escritas
+            printf("------------------------------------------------------------------------\n");
+            printf("%d WRITES FINISHED\n", writesNow);
+            printf("------------------------------------------------------------------------\n");
             writesNow = 0;
-            readersPriority = 1;
-            writersPriority = 0;
+            readersPriority = 1; //Concede a próxima vez aos leitores
+            writersPriority = 0; //Tira a prioridade dos escritores
             pthread_cond_broadcast(&readNow_cond); // Acorda todos os leitores
         } else {
-            pthread_cond_signal(&writeNow_cond);    // Acorda um escritor
+            pthread_cond_signal(&writeNow_cond);    // Acorda um escritor se ainda não finalizaram as M escritas
         }
         pthread_mutex_unlock(&mutex);
     }
