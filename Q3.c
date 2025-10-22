@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define MAX_QUEUE_SIZE 100                                              // Tamanho máximo da fila de impressão
-#define NUM_USERS 3                                                     // Número de usuários
-#define FILES_PER_USER 5                                                // 0 se quiser arquivos infinitos
+#define MAX_QUEUE_SIZE 10                                               // Tamanho máximo da fila de impressão
+#define NUM_USERS 1                                                     // Número de usuários
+#define FILES_PER_USER 0                                                // 0 se quiser arquivos infinitos
 #define MAX_PRIORITY 10                                                 // Prioridade máxima dos arquivos
 
 typedef struct {                                                        // Estrutura para representar um arquivo para impressão
@@ -96,7 +96,7 @@ void* user(void* ThreadID) {                                            // Funç
         queue_size++;
         heapify_up(queue_size - 1);
 
-        printf("Usuário %d enviou um arquivo com prioridade %d\n", id, new_file->priority);
+        printf("Usuário %d enviou um arquivo com prioridade %d\n", id, new_file->priority); //Caso o arquivo tenha sido adicionado com sucesso
 
         pthread_cond_signal(&queue_not_empty);
         pthread_mutex_unlock(&queue_mutex);
@@ -105,6 +105,7 @@ void* user(void* ThreadID) {                                            // Funç
 }
 
 int main() {
+    //Definição e criação das threads
     pthread_t printer_thread;
     pthread_t user_threads[NUM_USERS];
     int user_ids[NUM_USERS];
