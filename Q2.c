@@ -123,13 +123,8 @@ void *producer() {
     pthread_mutex_unlock(&produced_mutex);
     int idx = rand()%B; //Random para escolha do buffer
     put(i, &buffers[idx]);  
-    printf("Produzido no bfr %d: %d\n", idx, i++);
+    printf("Produzido no bfr %d: %d\n", idx, i);
     
-
-
-    if (produced >= NUM_ITEMS){ //Se produziu todos os itens, encerra
-      break;
-    }
   } 
   for(int i=0; i<B; i++){ // Acordar todas as threads (pode ser que algumas estejam dormindo)
     pthread_mutex_lock(&buffers[i].mutex);
@@ -145,13 +140,14 @@ int get(buffer *buffer_atual){
   pthread_mutex_lock(&buffer_atual->mutex);
 
   // Espera enquanto o buffer estiver vazio e ainda houver itens a serem produzidos
-  while((buffer_atual->items == 0) && (produced < NUM_ITEMS)){
-    pthread_cond_wait(&buffer_atual->fill, &buffer_atual->mutex);
-  }
+  while(buffer_atual->items == 0){
 
-  if (buffer_atual->items == 0 && produced >= NUM_ITEMS) {  
-    pthread_mutex_unlock(&buffer_atual->mutex);
-    return -1; // Sinal para o consumidor parar (Tudo já foi produzido e o buffer esvaziou, Deve-se ir para outro)
+    if (produced >= NUM_ITEMS) {  
+      pthread_mutex_unlock(&buffer_atual->mutex);
+      return -1; // Sinal para o consumidor parar (Tudo já foi produzido e o buffer esvaziou, Deve-se ir para outro)
+    }
+    //Se a produção não terminou, espera por itens
+    pthread_cond_wait(&buffer_atual->fill, &buffer_atual->mutex);
   }
 
   //Retira o item do buffer (fila circular)
@@ -161,7 +157,7 @@ int get(buffer *buffer_atual){
   buffer_atual->items--; 
 
   //Se havia BUFFER_SIZE itens antes de retirar, agora  se pode produzir
-  pthread_cond_broadcast(&buffer_atual->empty);
+  pthread_cond_signal(&buffer_atual->empty);
   pthread_mutex_unlock(&buffer_atual->mutex);
   return result;
 }
@@ -188,9 +184,6 @@ void *consumer() {
       pthread_mutex_unlock(&consumed_mutex);
     }
 
-    if (consumed >= NUM_ITEMS){   //Se consumiu todos os itens, encerra
-      break;
-    }
   }
 
   for (int i = 0; i < B; i++) { //Acorda threads que possam estar dormindo
