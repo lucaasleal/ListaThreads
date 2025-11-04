@@ -1,3 +1,5 @@
+//Questão 5
+
 #include <stdio.h>
 #include <pthread.h>
 #include <string.h>
