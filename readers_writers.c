@@ -1,3 +1,5 @@
+//Questão 4
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
