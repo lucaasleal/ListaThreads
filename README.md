@@ -1,4 +1,4 @@
-# ListaThreads - Solutions for Classic Concurrency Problems
+# PThreadsSO - Solutions for Classic Concurrency Problems
 
 This repository contains C implementations for a series of classic concurrency problems, using the Pthreads library. Each file addresses a different challenge, demonstrating the use of mutexes, condition variables, and synchronization strategies.
 
